@@ -1,0 +1,302 @@
+---
+- name: Bootstrap Automation EC2
+  hosts: automation
+  become: true
+
+  tasks:
+
+    - name: Update apt package cache
+      apt:
+        update_cache: yes
+
+    - name: Install basic dependencies
+      apt:
+        name:
+          - curl
+          - wget
+          - unzip
+          - gnupg
+          - ca-certificates
+          - apt-transport-https
+          - software-properties-common
+        state: present
+      tags:
+        - basics 
+
+
+    - name: Install Java
+      apt:
+        name: openjdk-21-jdk
+        state: present
+      tags:
+        - java
+
+      #Docker Installation
+    - name: Create Docker keyrings directory
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+      tags:
+        - docker
+
+    - name: Download Docker GPG key
+      get_url:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        dest: /etc/apt/keyrings/docker.asc
+        mode: '0644'
+      tags:
+        - docker
+
+    - name: Add Docker repository
+      apt_repository:
+        repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+        filename: docker
+      tags:
+        - docker
+
+    - name: Update apt cache after adding Docker repository
+      apt:
+        update_cache: yes
+      tags:
+        - docker
+
+    - name: Install Docker packages
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+      tags:
+        - docker
+
+    - name: Ensure Docker service is running
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+      tags:
+        - docker
+
+    - name: Add ubuntu user to Docker group
+      user:
+        name: ubuntu
+        groups: docker
+        append: yes
+      tags:
+        - docker
+
+#JENKINS
+    - name: Download Jenkins repository key
+      get_url:
+        url: https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key
+        dest: /usr/share/keyrings/jenkins-keyring.asc
+        mode: '0644'
+      tags:
+        - jenkins
+
+    - name: Add Jenkins repository
+      apt_repository:
+        repo: "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/"
+        state: present
+        filename: jenkins
+      tags:
+        - jenkins
+
+    - name: Update apt cache for Jenkins
+      apt:
+        update_cache: yes
+      tags:
+        - jenkins
+
+    - name: Install Jenkins
+      apt:
+        name: jenkins
+        state: present
+      tags:
+        - jenkins
+
+    - name: Ensure Jenkins is running and enabled
+      systemd:
+        name: jenkins
+        state: started
+        enabled: yes
+      tags:
+        - jenkins
+
+#AWS_CLI
+    - name: Download AWS CLI installer
+      get_url:
+        url: https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip
+        dest: /tmp/awscliv2.zip
+        mode: '0644'
+      tags:
+        - aws_cli
+
+    - name: Extract AWS CLI installer
+      unarchive:
+        src: /tmp/awscliv2.zip
+        dest: /tmp
+        remote_src: yes
+      tags:
+        - aws_cli
+
+    - name: Install AWS CLI
+      command: /tmp/aws/install
+      args:
+        creates: /usr/local/bin/aws
+      tags:
+        - aws_cli
+
+#KUBECTL
+    - name: Download Kubernetes repository signing key
+      get_url:
+        url: https://pkgs.k8s.io/core:/stable:/v1.33/deb/Release.key
+        dest: /etc/apt/keyrings/kubernetes-apt-keyring.asc
+        mode: '0644'
+      tags:
+        - kubectl
+
+    - name: Add Kubernetes apt repository
+      apt_repository:
+        repo: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.asc] https://pkgs.k8s.io/core:/stable:/v1.33/deb/ /"
+        state: present
+        filename: kubernetes
+      tags:
+        - kubectl
+
+    - name: Update apt cache for Kubernetes
+      apt:
+        update_cache: yes
+      tags:
+        - kubectl
+
+    - name: Install kubectl
+      apt:
+        name: kubectl
+        state: present
+      tags:
+        - kubectl
+
+#EKSCTL
+    - name: Download eksctl archive
+      get_url:
+        url: https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_Linux_amd64.tar.gz
+        dest: /tmp/eksctl.tar.gz
+        mode: '0644'
+      tags:
+        - eksctl
+
+    - name: Extract eksctl
+      unarchive:
+        src: /tmp/eksctl.tar.gz
+        dest: /tmp
+        remote_src: yes
+      tags:
+        - eksctl
+
+    - name: Install eksctl binary
+      copy:
+        src: /tmp/eksctl
+        dest: /usr/local/bin/eksctl
+        mode: '0755'
+        remote_src: yes
+      tags:
+        - eksctl
+#HELM
+    - name: Download Helm installation script
+      get_url:
+        url: https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+        dest: /tmp/get-helm-3
+        mode: '0755'
+      tags:
+        - helm
+
+    - name: Install Helm
+      command: /tmp/get-helm-3
+      args:
+        creates: /usr/local/bin/helm
+      tags:
+        - helm
+
+#TERRAFORM
+    - name: Download HashiCorp GPG key
+      get_url:
+        url: https://apt.releases.hashicorp.com/gpg
+        dest: /etc/apt/keyrings/hashicorp.asc
+        mode: '0644'
+      tags:
+        - terraform
+
+    - name: Add HashiCorp repository
+      apt_repository:
+        repo: "deb [signed-by=/etc/apt/keyrings/hashicorp.asc] https://apt.releases.hashicorp.com {{ ansible_distribution_release }} main"
+        state: present
+        filename: hashicorp
+      tags:
+        - terraform
+
+    - name: Update apt cache for HashiCorp
+      apt:
+        update_cache: yes
+      tags:
+        - terraform
+
+    - name: Install Terraform
+      apt:
+        name: terraform
+        state: present
+      tags:
+        - terraform
+
+#trivy
+    - name: Download Trivy GPG key
+      get_url:
+        url: https://aquasecurity.github.io/trivy-repo/deb/public.key
+        dest: /etc/apt/keyrings/trivy.asc
+        mode: '0644'
+      tags:
+        - trivy
+
+    - name: Add Trivy repository
+      apt_repository:
+        repo: "deb [signed-by=/etc/apt/keyrings/trivy.asc] https://aquasecurity.github.io/trivy-repo/deb generic main"
+        state: present
+        filename: trivy
+      tags:
+        - trivy
+
+    - name: Update apt cache for Trivy
+      apt:
+        update_cache: yes
+      tags:
+        - trivy
+
+    - name: Install Trivy
+      apt:
+        name: trivy
+        state: present
+      tags:
+        - trivy
+
+#SONAR QUBE
+    - name: Pull SonarQube image
+      command: docker pull sonarqube:lts-community
+      tags:
+        - sonarqube
+
+    - name: Run SonarQube container
+      command: >
+        docker run -d
+        --name sonarqube
+        --restart unless-stopped
+        -p 9000:9000
+        sonarqube:lts-community
+      args:
+        creates: /tmp/sonarqube-container-created
+      tags:
+        - sonarqube
